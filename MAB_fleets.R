@@ -16,7 +16,7 @@
 library(data.table)
 
 ## Load commercial landings from Sean and MAB basic inputs
-load("data/mean_landings_mab_80_85.RData")
+load(url('https://github.com/NOAA-EDAB/Rpathdata/blob/dd034d1573f79ce011c01054bdc017e241e7857e/data/mean_landings_mab_80_85.RData?raw=true'))
 source(here("MAB_basic_inputs.R"))
 
 ## Rename HMS to HMS Fleet

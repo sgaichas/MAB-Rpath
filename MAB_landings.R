@@ -1,4 +1,3 @@
-## ---------------------------
 ## Script name: MAB_landings.R
 ##
 ## Purpose of script: Convert commercial landings from Sean Lucey to correct
@@ -7,18 +6,19 @@
 ## Author: Brandon Beltz, updated by Sarah J. Weisberg
 ##
 ## Email: brandon.beltz@stonybrook.edu
-## ---------------------------
 
-# Fri Dec  8 17:01:12 2023 ------------------------------
 
-## Load libraries, packages and functions
+# Fri Dec  8 17:01:12 2023
+
+## Load libraries, packages and functions ---------------------------------------------------
 library(here);library(tidyr);library(dplyr);library(survdat)
 
 ## Load landings, species codes, survdat and basic inputs, 
-load(here("data/mean_landings_mab_80_85.RData"))
-load(here("data/Species_codes.RData"))
-load(here("data/Survdat.RData"))
+load(url('https://github.com/NOAA-EDAB/Rpathdata/blob/dd034d1573f79ce011c01054bdc017e241e7857e/data/mean_landings_mab_80_85.RData?raw=true'))
+load(url('https://github.com/NOAA-EDAB/Rpathdata/blob/dd034d1573f79ce011c01054bdc017e241e7857e/data/Species_codes.RData?raw=true'))
+load(url("https://github.com/NOAA-EDAB/Rpathdata/blob/dd034d1573f79ce011c01054bdc017e241e7857e/data/Survdat.RData?raw=true"))
 source(here("MAB_basic_inputs.R"))
+
 
 ## Change "HMS" to "HMS Fleet"
 mean.land[FLEET == "HMS",FLEET := "HMS FLEET"]

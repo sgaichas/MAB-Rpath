@@ -2,6 +2,8 @@
 # contains only Calanus finmarchicus
 
 #Author: Sarah J. Weisberg
+# Updated by M.T. Grezlik to reference Group name rather than column number
+# this was done when splitting groups changed column numbers
 # Thu Dec 14 12:51:29 2023 ------------------------------
 
 
@@ -118,38 +120,116 @@ MAB.rpath.params$model$Biomass[which(MAB.rpath.params[["model"]][["Group"]] == "
 #get rid of NAs first
 MAB.rpath.params$diet<-replace(MAB.rpath.params$diet,is.na(MAB.rpath.params$diet),0)
 
-#Shift AmLobster[1] predation
+## AmLobster -----------------------------------------------------------
 #Shift 0.5% from Macrobenthos[20] to LgCopepods[17]
-MAB.rpath.params$diet[20,2]<-MAB.rpath.params$diet[20,2]-0.005
-MAB.rpath.params$diet[17,2]<-MAB.rpath.params$diet[17,2]+0.005
-#Shift 0.5% from Macrobenthos[20]] to LgCopepods[38]
-MAB.rpath.params$diet[20,2]<-MAB.rpath.params$diet[20,2]-0.005
-MAB.rpath.params$diet[38,2]<-MAB.rpath.params$diet[38,2]+0.005
 
-#Shift AtlMackerel[4] predation
+# MAB.rpath.params$diet[20,2]<-MAB.rpath.params$diet[20,2]-0.005
+MAB.rpath.params$diet[Group == 'Macrobenthos', AmLobster := AmLobster - 0.005]
+# MAB.rpath.params$diet[17,2]<-MAB.rpath.params$diet[17,2]+0.005
+MAB.rpath.params$diet[Group == 'LgCopepods', AmLobster := AmLobster + 0.005]
+
+#Shift 0.5% from Macrobenthos[20]] to SmCopepods[38]
+
+# MAB.rpath.params$diet[20,2]<-MAB.rpath.params$diet[20,2]-0.005
+MAB.rpath.params$diet[Group == 'Macrobenthos', AmLobster := AmLobster - 0.005]
+# MAB.rpath.params$diet[38,2]<-MAB.rpath.params$diet[38,2]+0.005
+MAB.rpath.params$diet[Group == 'SmCopepods', AmLobster := AmLobster + 0.005]
+
+##AtlMackerel -----------------------------------------------------------
 #Remove 5% from Macrobenthos[20]
 #Remove 8% from Micronekton[23]
 #Remove 7% from Krill
 #Remove 10% from SmPelagics[41]
 #Remove 30% from LgCopepods[17]
 #Move 60% to SmCopepods[38]
-MAB.rpath.params$diet[20,5]<-MAB.rpath.params$diet[20,5]-0.05
-MAB.rpath.params$diet[23,5]<-MAB.rpath.params$diet[23,5]-0.08
-MAB.rpath.params$diet[50,5]<-MAB.rpath.params$diet[50,5]-0.07
-MAB.rpath.params$diet[41,5]<-MAB.rpath.params$diet[41,5]-0.1
-MAB.rpath.params$diet[17,5]<-MAB.rpath.params$diet[17,5]-0.3
-MAB.rpath.params$diet[38,5]<-MAB.rpath.params$diet[38,5]+0.6
+# MAB.rpath.params$diet[20,5]<-MAB.rpath.params$diet[20,5]-0.05
+MAB.rpath.params$diet[Group == 'Macrobenthos', AtlMackerel := AtlMackerel - 0.05]
+# MAB.rpath.params$diet[23,5]<-MAB.rpath.params$diet[23,5]-0.08
+MAB.rpath.params$diet[Group == 'Micronekton', AtlMackerel := AtlMackerel - 0.08]
+# MAB.rpath.params$diet[50,5]<-MAB.rpath.params$diet[50,5]-0.07
+MAB.rpath.params$diet[Group == 'Krill', AtlMackerel := AtlMackerel - 0.07]
+# MAB.rpath.params$diet[41,5]<-MAB.rpath.params$diet[41,5]-0.1
+MAB.rpath.params$diet[Group =='SmPelagics', AtlMackerel := AtlMackerel - 0.1]
+# MAB.rpath.params$diet[17,5]<-MAB.rpath.params$diet[17,5]-0.3
+MAB.rpath.params$diet[Group == 'LgCopepods', AtlMackerel := AtlMackerel - 0.3]
+# MAB.rpath.params$diet[38,5]<-MAB.rpath.params$diet[38,5]+0.6
+MAB.rpath.params$diet[Group == 'SmCopepods', AtlMackerel := AtlMackerel + 0.6]
 
-#Shift SmCopepod[38] predation
+##SmCopepods -----------------------------------------------------------
 #Move 0.25% from SmCopepods[38] to LgCopepods[17]
-MAB.rpath.params$diet[38,39]<-MAB.rpath.params$diet[38,39]-0.0025
-MAB.rpath.params$diet[17,39]<-MAB.rpath.params$diet[17,39]+0.0025
+# MAB.rpath.params$diet[38,39]<-MAB.rpath.params$diet[38,39]-0.0025
+MAB.rpath.params$diet[Group == 'SmCopepods', SmCopepods := SmCopepods - 0.0025]
+# MAB.rpath.params$diet[17,39]<-MAB.rpath.params$diet[17,39]+0.0025
+MAB.rpath.params$diet[Group == 'LgCopepods', SmCopepods := SmCopepods + 0.0025]
 
 
-#For rest of groups, add portion to SmCope consumption
-MAB.rpath.params$diet[38,c(3:4,5:38,40:50)]<-
-  MAB.rpath.params$diet[38,c(3:4,5:38,40:50)]+
-  MAB.rpath.params$diet[17,c(3:4,5:38,40:50)]*(1-copes_ratio)
-MAB.rpath.params$diet[17,c(3:4,5:38,40:50)]<-
-  MAB.rpath.params$diet[17,c(3:4,5:38,40:50)]*copes_ratio
+## For rest of groups, add portion to SmCope consumption ----------------
+# MAB.rpath.params$diet[38,c(3:4,5:38,40:50)]<-
+#   MAB.rpath.params$diet[38,c(3:4,5:38,40:50)]+
+#   MAB.rpath.params$diet[17,c(3:4,5:38,40:50)]*(1-copes_ratio)
+# 
+# MAB.rpath.params$diet[17,c(3:4,5:38,40:50)]<-
+#   MAB.rpath.params$diet[17,c(3:4,5:38,40:50)]*copes_ratio
 
+# find species that prey on both small and large copepods
+SmCopes.preds <- MAB.rpath.params$diet[Group == "SmCopepods",] |> 
+                        pivot_longer(!Group, names_to = 'Rpred', values_to ='preyper') |> 
+                        filter(preyper > 0) |> 
+                        select(Rpred)
+LgCopes.preds <- MAB.rpath.params$diet[Group == "LgCopepods",] |> 
+                        pivot_longer(!Group, names_to = 'Rpred', values_to ='preyper') |> 
+                        filter(preyper > 0) |>
+                        select(Rpred)
+# find overlapping Rpred
+Copes.preds <- intersect(SmCopes.preds, LgCopes.preds)
+
+### AmLobster -----------------------------------------------------------
+AmLobster.from.large <- MAB.rpath.params$diet[Group == 'LgCopepods', AmLobster]
+MAB.rpath.params$diet[Group == 'SmCopepods', AmLobster := AmLobster + (AmLobster.from.large * (1-copes_ratio))]
+MAB.rpath.params$diet[Group == 'LgCopepods', AmLobster := AmLobster * copes_ratio]
+
+### GelZooplankton -----------------------------------------------------------
+GelZooplankton.from.large <- MAB.rpath.params$diet[Group == 'LgCopepods', GelZooplankton]
+MAB.rpath.params$diet[Group == 'SmCopepods', GelZooplankton := GelZooplankton + (GelZooplankton.from.large * (1-copes_ratio))]
+MAB.rpath.params$diet[Group == 'LgCopepods', GelZooplankton := GelZooplankton * copes_ratio]
+
+### LgCopepods -----------------------------------------------------------
+LgCopepods.from.large <- MAB.rpath.params$diet[Group == 'LgCopepods', LgCopepods]
+MAB.rpath.params$diet[Group == 'SmCopepods', LgCopepods := LgCopepods + (LgCopepods.from.large * (1-copes_ratio))]
+MAB.rpath.params$diet[Group == 'LgCopepods', LgCopepods := LgCopepods * copes_ratio]
+
+### Macrobenthos -----------------------------------------------------------
+Macrobenthos.from.large <- MAB.rpath.params$diet[Group == 'LgCopepods', Macrobenthos]
+MAB.rpath.params$diet[Group == 'SmCopepods', Macrobenthos := Macrobenthos + (Macrobenthos.from.large * (1-copes_ratio))]
+MAB.rpath.params$diet[Group == 'LgCopepods', Macrobenthos := Macrobenthos * copes_ratio]
+
+### Micronekton -----------------------------------------------------------
+Micronekton.from.large <- MAB.rpath.params$diet[Group == 'LgCopepods', Micronekton]
+MAB.rpath.params$diet[Group == 'SmCopepods', Micronekton := Micronekton + (Micronekton.from.large * (1-copes_ratio))]
+MAB.rpath.params$diet[Group == 'LgCopepods', Micronekton := Micronekton * copes_ratio]
+
+### SmCopepods -----------------------------------------------------------
+SmCopepods.from.large <- MAB.rpath.params$diet[Group == 'LgCopepods', SmCopepods]
+MAB.rpath.params$diet[Group == 'SmCopepods', SmCopepods := SmCopepods + (SmCopepods.from.large * (1-copes_ratio))]
+MAB.rpath.params$diet[Group == 'LgCopepods', SmCopepods := SmCopepods * copes_ratio]
+
+### SmPelagics -----------------------------------------------------------
+SmPelagics.from.large <- MAB.rpath.params$diet[Group == 'LgCopepods', SmPelagics]
+MAB.rpath.params$diet[Group == 'SmCopepods', SmPelagics := SmPelagics + (SmPelagics.from.large * (1-copes_ratio))]
+MAB.rpath.params$diet[Group == 'LgCopepods', SmPelagics := SmPelagics * copes_ratio]
+
+### Krill -----------------------------------------------------------
+Krill.from.large <- MAB.rpath.params$diet[Group == 'LgCopepods', Krill]
+MAB.rpath.params$diet[Group == 'SmCopepods', Krill := Krill + (Krill.from.large * (1-copes_ratio))]
+MAB.rpath.params$diet[Group == 'LgCopepods', Krill := Krill * copes_ratio]
+
+### AtlMenhaden -----------------------------------------------------------
+AtlMenhaden.from.large <- MAB.rpath.params$diet[Group == 'LgCopepods', AtlMenhaden]
+MAB.rpath.params$diet[Group == 'SmCopepods', AtlMenhaden := AtlMenhaden + (AtlMenhaden.from.large * (1-copes_ratio))]
+MAB.rpath.params$diet[Group == 'LgCopepods', AtlMenhaden := AtlMenhaden * copes_ratio]
+
+#find the sum of each column
+diet.check <-  MAB.rpath.params$diet |> 
+                pivot_longer(!Group, names_to = 'Rpred', values_to ='preyper') |> 
+                group_by(Rpred) |> 
+                summarise(sum = sum(preyper))

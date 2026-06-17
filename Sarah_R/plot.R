@@ -10,9 +10,8 @@ library(ggnetwork)
 library(viridis)
 
 #first run enaR_sense.R to get orig.network
-# MAB model to visuale network ----------------------------------------------------
+# MAB model to visual network ----------------------------------------------------
 #pull network structure
-source(here("enaStructure.R"))
 A<-enaStructure(orig.network_MAB)$A
 g<-igraph::graph_from_adjacency_matrix(A)
 

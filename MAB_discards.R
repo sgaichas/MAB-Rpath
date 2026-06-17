@@ -20,7 +20,7 @@
 library(here);library(tidyr);library(data.table)
 
 ## Load observer data and landings
-load(here("data/observer_data.RData"))
+load(url('https://github.com/NOAA-EDAB/Rpathdata/blob/3c1362b6f1517618147becc2b6c96c6058867941/data/observer_data.RData?raw=true'))
 source(here("MAB_landings.R"))
 
 ## Rename HMS fleet

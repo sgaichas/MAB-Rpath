@@ -99,7 +99,7 @@ orig.biomass<-scene$start_state$Biomass
 
 # ----- Set up ecosense generator ----- #######################################
 scene$params$BURN_YEARS <- 50
-NUM_RUNS <- 525
+NUM_RUNS <- nkept
 parlist <- as.list(rep(NA, NUM_RUNS))
 kept <- rep(NA, NUM_RUNS)
 
@@ -119,8 +119,8 @@ for (irun in 1:NUM_RUNS){
   # {cat(irun,": fail in year ",MABtest$crash_year,": ",failList,"\n"); kept[irun] <- F; flush.console()}
   #   else
   #   {cat(irun,": success!\n"); kept[irun]<-T;  flush.console()}}
-  # failList<-as.data.frame(failList)
-  # # fail_groups<-rbind(fail_groups,failList)
+  # # failList<-as.data.frame(failList)
+  # # # fail_groups<-rbind(fail_groups,failList)
   parlist[[irun]]$BURN_YEARS <- 1
 }
        

@@ -1,4 +1,3 @@
-## ---------------------------
 ## Script name: MAB_biomass_estimates.R
 ##
 ## Purpose of script: Calculate biomass estimates for single-species and 
@@ -6,30 +5,37 @@
 ##                    EMAX estimates, respectively.
 ##
 ## Author: Brandon Beltz
+## edited by: M.T. Grezlik
 ##
 ## Date Created: 2021-06-15
 ##
-## Email: brandon.beltz@stonybrook.edu
-## ---------------------------
+## Email: mgrezlik@umassd.edu
 ##
 ## Notes: This version is specific to the MABRpath model.
 ##
-## ---------------------------
+
 
 ## Load libraries, packages and functions
 
 library(data.table)
 library(here)
-remotes::install_github('NOAA-EDAB/survdat')
+# remotes::install_github('NOAA-EDAB/survdat')
 library(survdat)
 library(lwgeom)
+library(dplyr)
+library(units)
+library(readr)
 '%notin%' <-Negate('%in%')
 
-## Load Survdat, species list and strata
-load(here("data/Survdat.RData"))
-load(here("data/Species_codes.RData"))
+## Load Survdat, species list and strata from Rpathdata repo
+load(url('https://github.com/NOAA-EDAB/Rpathdata/blob/f34255ee1afea1bdc51e90166f79df9b273de6cd/data/Survdat.RData?raw=true'))
+load(url('https://github.com/NOAA-EDAB/Rpathdata/blob/f34255ee1afea1bdc51e90166f79df9b273de6cd/data/Species_codes.RData?raw=true'))
+load(url('https://github.com/NOAA-EDAB/Rpathdata/blob/f34255ee1afea1bdc51e90166f79df9b273de6cd/data/survdatClams.RData?raw=true'))
+load(url('https://github.com/NOAA-EDAB/Rpathdata/blob/f34255ee1afea1bdc51e90166f79df9b273de6cd/data/survdatScallops.RData?raw=true'))
 
-#Calculate total MAB area
+source(here('MAB_basic_inputs.R'))
+
+#Calculate total MAB area ------------------------------------------
 area<-sf::st_read(dsn=system.file("extdata","strata.shp",package="survdat"))
 area<-get_area(areaPolygon = area, areaDescription="STRATA")
 MAB.area<-subset(area, area$STRATUM %in% MAB.strata)
@@ -48,7 +54,7 @@ source(here('MAB_basic_inputs.R'))
 ## Aggregate low biomass species
 spp <- spp[!duplicated(spp$SVSPP),]
 spp <- spp[RPATH == 'AtlHerring', RPATH := 'SmPelagics']
-spp <- spp[RPATH == 'Clams', RPATH := 'Megabenthos']
+# spp <- spp[RPATH == 'Clams', RPATH := 'Megabenthos']
 spp <- spp[RPATH == 'Haddock', RPATH := 'OtherDemersals']
 spp <- spp[RPATH == 'LargePelagics', RPATH := 'OtherPelagics']
 spp <- spp[RPATH == 'OffHake', RPATH := 'OtherDemersals']
@@ -62,7 +68,7 @@ spp <- spp[RPATH == 'WitchFlounder', RPATH := 'OtherDemersals']
 spp <- spp[RPATH == 'WhiteHake', RPATH := 'OtherDemersals']
 #spp <- spp[SCINAME == 'BREVOORTIA', RPATH := 'AtlMenhaden']
 
-#Calculate swept area biomass
+#Calculate swept area biomass ------------------------------------------
 #Fall season only
 swept<-calc_swept_area(surveyData=survdat, areaPolygon = 'NEFSC strata', areaDescription = 'STRATA', 
                        filterByArea = MAB.strata, filterBySeason= "FALL", 
@@ -103,11 +109,105 @@ setnames(summary.biomass, 'V1','Biomass')
 MAB.biomass.80s<-summary.biomass[YEAR %in% 1980:1985, mean(Biomass), by=RPATH]
 setnames(MAB.biomass.80s, 'V1','Biomass')
 
-##Save output
-save(MAB.biomass.80s, file = 'data/MAB_biomass_fall_80s.RData')
+#Replace Biomass for Clams and Scallops with appropriate surveys --------
 
-## Add EMAX groups
-load("data/EMAX_params.RData")
+##Clams ----------------------------------------------
+#Use GB clam region to calculate biomass
+MAB.clam.index <- clams$data |> 
+                    filter(clam.region != 'MAB') |>
+                    filter(!is.na(SVSPP))
+clam.index <- MAB.clam.index |>
+                  group_by(YEAR, SVSPP) |>
+                  mutate(B = mean(BIOMASS.MW,narm = T)) |>
+                  ungroup()
+
+#Need to expand from kg/tow to mt/km^2
+# Clam tows can vary greatly by I'll use an example tow as the expansion
+# 0.0039624 (dredge width in km) * 0.374(tow length in km) = 0.00148 
+#kg to mt is 0.001
+# so conversion is 0.001 / 0.00148 or 0.6757
+# clam.index[, B := B * 0.6757]
+# clam.index[, Units := 'mt km^-2']
+# clam.index$RPATH <- ifelse(clam.index$SVSPP == 409, 'OceanQuahog','SurfClam')
+#clam.index[, RPATH := 'Clams']
+
+clam.index <- clam.index |>
+                mutate(B = B * 0.6757) |>
+                mutate(Units = 'mt km^-2') |>
+                mutate(RPATH = ifelse(SVSPP == 409, 
+                                      'OceanQuahog','SurfClam')) |> 
+                ungroup()
+
+
+#Input biomass
+# clam.input <- clam.index[YEAR %in% 1981:1985, .(B = mean(B, na.rm = T)),
+#                          by = RPATH]
+
+clam.input <- clam.index |>
+                group_by(RPATH) |>
+                filter(YEAR %in% 1981:1985)|>
+                mutate(Biomass = mean(B, na.rm = T)) |> 
+                select(RPATH, Biomass) |>
+                distinct()
+
+#remove old biomass estimates for clams
+MAB.biomass.80s <- MAB.biomass.80s[RPATH != 'OceanQuahog',]
+MAB.biomass.80s <- MAB.biomass.80s[RPATH != 'SurfClam',]
+#Add clam biomass 
+MAB.biomass.80s$Biomass <- drop_units(MAB.biomass.80s$Biomass)
+MAB.biomass.80s <- rbindlist(list(MAB.biomass.80s, clam.input))
+
+##Scallops ----------------------------------------------
+#Scallops and clam survey not included in ms-keyrun data set as they are not 
+#used in the other models
+library(DBI); library(sf); library(survdat)
+
+#Connect to the database
+# channel <- dbutils::connect_to_database('sole', 'slucey')
+
+#scall <- survdat::get_survdat_scallop_data(channel, getWeightLength = T)
+# load(here::here('data', 'survdatScallops.RData'))
+
+#Scallop survey did not record weight prior to 2001 (FSCS) so need to manually
+#calculate catch weights
+scalldat <- scallops$survdat[, BIOMASS := sum(WGTLEN), by = c('YEAR', 'STATION')]
+
+#Calculate scallop index
+#use poststrat to assign to EPU
+epu <- sf::st_read(dsn = here::here('data','gis', 'EPU_extended.shp'))
+
+
+scall.mean <- survdat::calc_stratified_mean(scalldat, areaPolygon = epu,
+                                            areaDescription = 'EPU',
+                                            filterByArea = 'MAB',
+                                            filterBySeason = 'SUMMER', tidy = T)
+
+scall.index <- scall.mean[variable == 'strat.biomass', .(Biomass = value), by = YEAR]
+
+#Need to expand from kg/tow to mt/km^2
+#A tow is approximately 0.0045 km^2 
+# 0.001317 (dredge width in nautical miles) * 1.852(convert naut mi to km)
+# 1.0 (tow length in nautical miles) * 1.852(convert naut mi to km)
+#kg to mt is 0.001
+# so conversion is 0.001 / 0.0045 or 0.222
+scall.index[, B := Biomass * 0.222]
+scall.index[, Biomass := NULL]
+scall.index[, Units := 'mt km^-2']
+scall.index[, RPATH := 'AtlScallop']
+
+#Input biomass
+scall.input <- scall.index[YEAR %in% 1981:1985, .(Biomass = mean(B, na.rm = T)),
+                           by = RPATH]
+
+#remove bottom trawl biomass estimate for scallop
+MAB.biomass.80s <- MAB.biomass.80s[RPATH != 'AtlScallop',]
+#Add scallop biomass estimate from scallop survey
+MAB.biomass.80s <- rbindlist(list(MAB.biomass.80s, scall.input))
+
+
+
+# Add EMAX groups ------------------------------------------
+load(url('https://github.com/NOAA-EDAB/Rpathdata/blob/cb7f1b381a79c927e842335408072293c087a8bf/data/MAB_EMAX_params.RData?raw=true'))
 MAB.EMAX<-as.data.table(EMAX.params)
 
 ## Merge groups with biomass estimates
@@ -165,6 +265,6 @@ setnames(MAB.biomass.80s,"Biomass.y","Biomass")
 ##Assuming 10% of menhaden biomass is in relevant MAB area
 MAB.biomass.80s<-MAB.biomass.80s[RPATH == "AtlMenhaden", Biomass :=1.775190819]
 
-## Output to .RData
-save(MAB.biomass.80s, file = 'data/MAB_biomass_estimates.RData')
 
+#Save output ------------------------------------------
+save(MAB.biomass.80s, file = 'data/MAB_biomass_fall_80s.RData')
