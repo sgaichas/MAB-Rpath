@@ -1,0 +1,163 @@
+---
+title: "MAB Rpath MSE test"
+author: "Sarah Gaichas"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+library(data.table)
+library(Rpath)
+
+```
+
+## Introduction
+
+The goal is to set up the Rpath MSE loop for the MAB Rpath model and integrate an MAFMC control rule. This starting point is based on code here https://github.com/thefaylab/cinar-mse-projects/tree/main/multispecies
+
+## Load the balanced Mid Atlantic Rpath model
+
+This model is the same used in S. Weisberg et al in press, comparing all three NEUS Rpaths.
+
+This model has had discards removed for the paper above so I'm only using it for testing. We will want to add them back in for any real analysis.
+
+
+```{r}
+
+load(here::here("outputs/MAB_params_Rpath_no_disc.RData"))
+load(here::here("outputs/MAB_Rpath_no_disc.RData"))
+
+MAB <- Rpath::rpath(MAB.rpath.params) # gives same object as MAB.rpath loaded above
+
+```
+
+This is the model structure, with fleets added in.
+One strange thing is the HMS Fleet has 0 catch so it breaks the plotting function.
+We should either take it out or add real catch.
+For this figure, HMS catch totalling 10% of HMS biomass was added. We are not using this model for analysis
+
+```{r}
+#visualize a group
+# the all-0 HMS Fleet breaks this plotting function
+# add small HMS Fleet catch for HMS
+hms_catch<-c(rep(0,14),0.003,rep(0,39),rep(NA,12))
+MAB.rpath.params$model[,"HMS Fleet":=hms_catch]
+
+MAB2 <- Rpath::rpath(MAB.rpath.params)
+
+webplot(MAB2, labels=T, fleets=T, highlight = 'SummerFlounder') #fleets not working in MAB plot
+
+```
+
+
+We will use the MAB for actual modeling. All of this code is modified from https://github.com/thefaylab/cinar-mse-projects/blob/main/multispecies/RpathOM_HCR_PSPS.Rmd
+
+These are simulated fishing scenarios to create contrast in biomass and catch. 
+
+```{r}
+#Add variable fishing in a dynamic run
+MAB.scene <- rsim.scenario(MAB, MAB.rpath.params, years = 1983:2022)
+
+MAB.scene <- adjust.fishing(MAB.scene, parameter = 'ForcedEffort', group = 'LG Mesh',
+                            sim.year = 1983:2017, value = c(rep(0, 15), rep(2.5, 5),
+                                                            rep(5, 5), rep(10, 5),
+                                                            rep(2.5, 5)))
+MAB.scene <- adjust.fishing(MAB.scene, parameter = 'ForcedEffort', group = 'Fixed Gear',
+                           sim.year = 1983:2017, value = c(rep(0, 15), rep(2.5, 5),
+                                                           rep(5, 5), rep(10, 5),
+                                                           rep(2.5, 5)))
+MAB.scene <- adjust.fishing(MAB.scene, parameter = 'ForcedEffort', group = 'SM Mesh',
+                            sim.year = 1983:2017, value = c(rep(0, 15), rep(1, 5),
+                                                            rep(1.5, 5), rep(2, 5),
+                                                            rep(0.5, 5)))
+MAB.scene <- adjust.fishing(MAB.scene, parameter = 'ForcedEffort', group = 'Recreational',
+                            sim.year = 1983:2017, value = c(rep(0, 15), rep(1, 5),
+                                                            rep(1.5, 5), rep(2, 5),
+                                                            rep(0.5, 5)))
+
+
+MAB.run <- rsim.run(MAB.scene, years = 1983:2022)
+
+```
+
+This is the impact of the fishing scenarios we have implemented
+
+```{r}
+#Plot results
+MAB.bio <- as.data.table(MAB.run$out_Biomass)
+MAB.bio[, Month := 1:nrow(MAB.bio)]
+MAB.bio <- data.table::melt(MAB.bio, id.vars = 'Month', variable.name = 'Group', 
+                           value.name = 'Biomass')
+start <- data.table::as.data.table(MAB.run$start_state$Biomass)
+start[, Group := names(MAB.run$start_state$Biomass)]
+
+MAB.bio <- merge(MAB.bio, start, by = 'Group')
+MAB.bio[, Rel.biomass := Biomass / V1]
+
+ggplot2::ggplot(MAB.bio[Group %in% c('SummerFlounder', 'Scup', 'Butterfish', 'SpinyDogfish',
+                                     'BlackSeaBass', 'Bluefish', 'AtlMackerel', 'Loligo',
+                                     'Illex')],
+                ggplot2::aes(x = Month, y = Rel.biomass, col = Group)) +
+  ggplot2::geom_line()
+
+```
+
+This function generates biomass and catch data from the system with both observation error and bias (if we want)
+No bias added here.
+
+```{r}
+#Need a function to pull observed data from the system:
+  
+GenData <- function(Rsim.output, group, sim.year, Sigma = 0.3, bias = 1, freq = 1){
+  # This routine generates data (unbiased generally) for the biological groups 
+  #and returns the appropriate object
+  
+  node     <- extract.node(Rsim.output, group)
+  TrueBio  <- node$AnnualBiomass[which(names(node$AnnualBiomass) == sim.year)]
+  Observed <- c()
+  for(Iyear in seq_along(sim.year)){
+    if (Iyear %% freq == 0){
+      Observed[Iyear] <- TrueBio[Iyear] * exp(rnorm(1, 0, Sigma) - Sigma^2/2)
+    } else Observed[Iyear] <- -1
+  }
+  Catch <- as.numeric(node$AnnualTotalCatch[which(names(node$AnnualBiomass) == sim.year)])
+  
+  out <- list(ObsBio = Observed, TotCatch = Catch, Fmort = Catch / Observed)
+  
+  return(out)
+} 
+
+```
+
+These are the generated "datasets"
+
+```{r}
+#Now generate the initial data set and fit to a Schaefer production model
+
+setkey(123)
+sf <- GenData(MAB.run, 'SummerFlounder', 1983:2022, Sigma = 0.1)  
+scup <- GenData(MAB.run, 'Scup', 1983:2022, Sigma = 0.1)
+butter <- GenData(MAB.run, 'Butterfish', 1983:2022, Sigma = 0.2)
+illex <- GenData(MAB.run, 'Illex', 1983:2022, Sigma = 0.3)
+
+#Merge into 1 file
+MAB.data <- data.table(Year = 1983:2022,
+                      Species = c(rep('SummerFlounder', 40), rep('Scup', 40), 
+                                  rep('Butterfish', 40), rep('Illex', 40)),
+                      ObsBio = c(sf$ObsBio, scup$ObsBio, butter$ObsBio, illex$ObsBio),
+                      TotCatch = c(sf$TotCatch, scup$TotCatch, butter$TotCatch, illex$TotCatch),
+                      Fmort = c(sf$Fmort, scup$Fmort, butter$Fmort, illex$Fmort))
+
+#plot
+MAB.data |>
+  ggplot2::ggplot()+
+  ggplot2::geom_point(ggplot2::aes(x=Year, y=ObsBio)) +
+  ggplot2::geom_line(ggplot2::aes(x=Year, y=TotCatch)) +
+  ggplot2::theme_bw() +
+  ggplot2::facet_wrap(~Species, scales = "free")
+
+```
+
