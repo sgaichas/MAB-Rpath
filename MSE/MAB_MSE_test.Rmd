@@ -504,56 +504,83 @@ Translating this into a control rule for Rpath requires some assumptions about O
 *  Butterfish OFL CV 150%
 *  Illex does not have full assessment or an OFL CV but if it did it might be 150%
 
-CHANGE NEXT TWO BLOCKS
-
 ```{r}
+
+SS.OFLCV <- data.frame(Species = c("SummerFlounder", "Scup", "Butterfish", "Illex"),
+                       OFLCV = c(0.60, 1.00, 1.50, 1.50))
+  
 control.pars <- list()
 
-control.pars$Species <- SS.Fmsy$Species
-control.pars$H1 <- 0.75*SS.Fmsy$Fmsy #this matches the max F in the other scenario
-control.pars$H2 <- 0.5*SS.Fmsy$Fmsy 
-control.pars$H3 <- 0.1*SS.Fmsy$Fmsy 
+control.pars$Species <- SS.Fmsy$Species # FOFL 
 
-control.pars$B1 <- 2.0*SS.BMSY$BMSY
+control.pars$Fofl <- SS.Fmsy$Fmsy
+
+control.pars$OFLCV <- SS.OFLCV$OFLCV # FOFL 
+
+control.pars$pstar1 <- 0.49
+control.pars$pstar2 <- 0.45
+control.pars$pstar3 <- 0.0
+
+# control.pars$H1 <- 0.75*SS.Fmsy$Fmsy #for alternative scenarios
+# control.pars$H2 <- 0.5*SS.Fmsy$Fmsy 
+# control.pars$H3 <- 0.1*SS.Fmsy$Fmsy 
+
+control.pars$B1 <- 1.5*SS.BMSY$BMSY
 control.pars$B2 <- 1.0*SS.BMSY$BMSY
-control.pars$B3 <- 0.5*SS.BMSY$BMSY
-control.pars$B4 <- 0.25*SS.BMSY$BMSY
+control.pars$B3 <- 0.1*SS.BMSY$BMSY
+
+control.pars$B4 <- 0.5*SS.BMSY$BMSY # not used in HCR but in status determination
 
 
-#Plateau-slope-plateau-slop HCR  
+#MAFMC ABC HCR  
   control <- function(estimated.biomass, control.pars, Species) {
     
-    H1 <- control.pars$H1[control.pars$Species==Species]
-    H2 <- control.pars$H2[control.pars$Species==Species]
-    H3 <- control.pars$H3[control.pars$Species==Species]
+    pstar1 <- control.pars$pstar1 
+    pstar2 <- control.pars$pstar2 
+    pstar3 <- control.pars$pstar3 
+    
+    Fofl <- control.pars$Fofl[control.pars$Species==Species]
+    
+    OFLCV <- control.pars$OFLCV[control.pars$Species==Species]
+
+    H1 <- qlnorm(pstar1, log(Fofl), log(OFLCV + Fofl))
+
+    H4 <- qlnorm(pstar3, log(Fofl), log(OFLCV + Fofl))
+    
    
     B4 <- control.pars$B4[control.pars$Species==Species]
+
     B3 <- control.pars$B3[control.pars$Species==Species]
     B2 <- control.pars$B2[control.pars$Species==Species]
     B1 <- control.pars$B1[control.pars$Species==Species]
     
     harv <- ifelse(estimated.biomass >= B1, H1,
                    ifelse(estimated.biomass < B1 & estimated.biomass >= B2,
-                          (H1-H2)/(B1-B2)*(estimated.biomass - B2) + H2,
-                          ifelse(estimated.biomass < B2 & estimated.biomass >= B3, H2,
-                                 ifelse(estimated.biomass < B3 & estimated.biomass > B4,
-                                        (H2-H3)/(B2-B3)*(estimated.biomass - B3) + H3,
-                                        ifelse(estimated.biomass <= B4, H3
-                                 )))))
+                          qlnorm((estimated.biomass-B2)*((pstar1-pstar2)/(B1-B2))+pstar2, log(Fofl), log(OFLCV + Fofl)),
+                          ifelse(estimated.biomass < B2 & estimated.biomass >= B3, 
+                                 qlnorm((estimated.biomass-B3)*((pstar2-pstar3)/(B2-B3)), log(Fofl), log(OFLCV + Fofl)),
+                                 ifelse(estimated.biomass < B3, H4, 0
+                                 ))))
     return(harv)
   }
 ```
 
-HCR Shape of PSPS
+HCR Shape scaled harvest rate and Rpath biomass
+
 ```{r}
-control.pars$Bmax <- 2.5*SS.BMSY$BMSY 
-plot(c(0,control.pars$B4[1],control.pars$B3[1],control.pars$B2[1],control.pars$B1[1],control.pars$Bmax[1]),
-     c(control.pars$H3[1],control.pars$H3[1],control.pars$H2[1],control.pars$H2[1],control.pars$H1[1],control.pars$H1[1]),
-     type='l',axes=F,xlab="estimated biomass",ylab="exploitation rate",
-     ylim=c(0,1.1*control.pars$H1[1]))
-axis(1,at=c(control.pars$B4[1],control.pars$B3[1],control.pars$B2[1],control.pars$B1[1]),labels=c("B4","B3","B2","B1"))
-axis(2,at=c(control.pars$H3[1],control.pars$H2[1],control.pars$H1[1]),labels=c("H3","H2","H1"))
-box()
+
+simbio <- seq(0, 2.0, 0.0001)
+sfharv <- control(simbio, control.pars, "SummerFlounder")
+scupharv <- control(simbio, control.pars, "Scup")
+butterharv <- control(simbio, control.pars, "Butterfish")
+illexharv <- control(simbio, control.pars, "Illex")
+
+plot(simbio, illexharv, type = "n")
+lines(simbio, sfharv) 
+lines(simbio, scupharv) 
+lines(simbio, butterharv)
+lines(simbio, illexharv)
+
 ```
 
 
@@ -562,7 +589,7 @@ We assume perfect implementation of the strategy - in that the realized catch is
 ```{r}
 #Cheating a little bit here
 frates <- Rpath::frate.table(MAB.scene)
-qtable <- frates[Group %in% c('SummerFlounder', 'Butterfish', 'Scup', "Illex"), list(Group, LGMesh, Fixed, SMMesh, Rec)]
+qtable <- frates[Group %in% c('SummerFlounder', 'Butterfish', 'Scup', "Illex"), list(Group, `Fixed Gear`, `LG Mesh`,  `SM Mesh`, Recreational)]
 
 implement <- function(TAC, q, B, ...) {
 effort <- TAC / (q * B)
@@ -577,7 +604,7 @@ CHANGE NOINTEGRATE IF NEEDED
 
 ```{r}
 #Create initial scenario
-MAB.scene <- rsim.scenario(MAB, MAB.params, years = 1983:2042)
+MAB.scene <- rsim.scenario(MAB, MAB.rpath.params, years = 1983:2042)
 
 #Apply the same initial fishing conditions
 MAB.scene <- adjust.fishing(MAB.scene, parameter = 'ForcedEffort', group = 'LG Mesh',
@@ -612,18 +639,16 @@ MAB.scene$params$NoIntegrate[which(names(MAB.scene$params$NoIntegrate) %in%
 MAB.run <- rsim.run(MAB.scene, years = 1983:2022, method = 'AB')
 ```
 
-Run the closed loop
-
-CHANGE GEARS AND ADD ILLEX TO ALL BELOW
+## Run the closed loop
 
 ```{r}
-set.seed(123)
+set.seed(1234)
 
 MAB.full <- copy(MAB.run)
 
-#Divide TAC proportionally between the three gears
-props <- qtable[, .SD / rowSums(.SD), .SDcols = c('Gillnet', 'OtterTrawlLg',
-                                                  'Midwater')]
+#Divide TAC proportionally between the four gears
+props <- qtable[, .SD / rowSums(.SD), .SDcols = c('LG Mesh', 'Fixed Gear',
+                                                  'SM Mesh', 'Recreational')]
 props[, Group := qtable[, Group]]
 
 for(iyear in 2023:2042){
@@ -631,52 +656,72 @@ for(iyear in 2023:2042){
     
   #New observations
   new.sf <- GenData(MAB.full, 'SummerFlounder', iyear, Sigma = 0.1)
-  new.butter <- GenData(MAB.full, 'Butterfish', iyear, Sigma = 0.1)
+  new.butter <- GenData(MAB.full, 'Butterfish', iyear, Sigma = 0.2)
   new.scup <- GenData(MAB.full, 'Scup', iyear, Sigma = 0.1)
+  new.illex <- GenData(MAB.full, 'Illex', iyear, Sigma = 0.3)
   
   #New TAC
   index.sf <- new.sf$ObsBio
   index.butter <- new.butter$ObsBio
   index.scup <- new.scup$ObsBio
+  index.illex <- new.illex$ObsBio
   
   TAC.sf <- control(index.sf, control.pars, Species = "SummerFlounder") * index.sf
   TAC.butter <- control(index.butter, control.pars, Species = "Butterfish") * index.butter
   TAC.scup <- control(index.scup, control.pars, Species = "Scup") * index.scup
+  TAC.illex <- control(index.illex, control.pars, Species = "Illex") * index.illex
+
   
   #proportion TAC
-  TAC.sf.lgm <- TAC.sf * props[Group == 'SummerFlounder', OtterTrawlLg]
-  TAC.sf.gil <- TAC.sf * props[Group == 'SummerFlounder', Gillnet]
-  TAC.sf.mid <- TAC.sf * props[Group == 'SummerFlounder', Midwater]
+  TAC.sf.lgm <- TAC.sf * props[Group == 'SummerFlounder', `LG Mesh`]
+  TAC.sf.fix <- TAC.sf * props[Group == 'SummerFlounder', `Fixed Gear`]
+  TAC.sf.smm <- TAC.sf * props[Group == 'SummerFlounder', `SM Mesh`]
+  TAC.sf.rec <- TAC.sf * props[Group == 'SummerFlounder', `Recreational`]
+
+  TAC.butter.lgm <- TAC.butter * props[Group == 'Butterfish', `LG Mesh`]
+  TAC.butter.fix <- TAC.butter * props[Group == 'Butterfish', `Fixed Gear`]
+  TAC.butter.smm <- TAC.butter * props[Group == 'Butterfish', `SM Mesh`]
+  TAC.butter.rec <- TAC.butter * props[Group == 'Butterfish', `Recreational`]
   
-  TAC.butter.lgm <- TAC.butter * props[Group == 'Butterfish', OtterTrawlLg]
-  TAC.butter.gil <- TAC.butter * props[Group == 'Butterfish', Gillnet]
-  TAC.butter.mid <- TAC.butter * props[Group == 'Butterfish', Midwater]
+  TAC.scup.lgm <- TAC.scup * props[Group == 'Scup', `LG Mesh`]
+  TAC.scup.fix <- TAC.scup * props[Group == 'Scup', `Fixed Gear`]
+  TAC.scup.smm <- TAC.scup * props[Group == 'Scup', `SM Mesh`]
+  TAC.scup.rec <- TAC.scup * props[Group == 'Scup', `Recreational`]
   
-  TAC.scup.lgm <- TAC.scup * props[Group == 'Scup', OtterTrawlLg]
-  TAC.scup.gil <- TAC.scup * props[Group == 'Scup', Gillnet]
-  TAC.scup.mid <- TAC.scup * props[Group == 'Scup', Midwater]
+  TAC.illex.lgm <- TAC.illex * props[Group == 'Illex', `LG Mesh`]
+  TAC.illex.fix <- TAC.illex * props[Group == 'Illex', `Fixed Gear`]
+  TAC.illex.smm <- TAC.illex * props[Group == 'Illex', `SM Mesh`]
+  TAC.illex.rec <- TAC.illex * props[Group == 'Illex', `Recreational`]
+  
   
   #Implement new TAC via effort
-  #Large mesh trawl and gillnet will be set by the lower effort between sf and butter
-  effort.lgm <- min(c(implement(TAC.sf.lgm, qtable[Group == 'SummerFlounder', OtterTrawlLg],
+  #Recreational and SM Mesh will be set by the lower effort between sf and scup
+  effort.smm <- min(c(implement(TAC.sf.smm, qtable[Group == 'SummerFlounder', `SM Mesh`],
                                 index.sf),
-                      implement(TAC.butter.lgm, qtable[Group == 'Butterfish', OtterTrawlLg],
-                                index.butter)))
-  effort.gil <- min(c(implement(TAC.sf.gil, qtable[Group == 'SummerFlounder', Gillnet],
+                      implement(TAC.scup.smm, qtable[Group == 'Scup', `SM Mesh`],
+                                index.scup)))
+  effort.rec <- min(c(implement(TAC.sf.rec, qtable[Group == 'SummerFlounder', `Recreational`],
                                 index.sf),
-                      implement(TAC.butter.gil, qtable[Group == 'Butterfish', Gillnet],
-                                index.butter))) 
-  #Midwater set by scup
-  effort.mid <- implement(TAC.scup.mid, qtable[Group == 'Scup', Midwater],
+                      implement(TAC.scup.rec, qtable[Group == 'Scup', `Recreational`],
+                                index.scup))) 
+  #LG Mesh set by butterfish
+  effort.lgm <- implement(TAC.butter.lgm, qtable[Group == 'Butterfish', `LG Mesh`],
+                          index.butter)
+  
+  #Fixed set by scup
+  effort.fix <- implement(TAC.scup.fix, qtable[Group == 'Scup', `Fixed Gear`],
                           index.scup)
+
   
   #Set new Effort
-  MAB.scene <- adjust.fishing(MAB.scene, 'ForcedEffort', 'OtterTrawlLg', 
+  MAB.scene <- adjust.fishing(MAB.scene, 'ForcedEffort', 'LG Mesh', 
                              sim.year = iyear + 1, value = effort.lgm)
-  MAB.scene <- adjust.fishing(MAB.scene, 'ForcedEffort', 'Gillnet', 
-                             sim.year = iyear + 1, value = effort.gil)
-  MAB.scene <- adjust.fishing(MAB.scene, 'ForcedEffort', 'Midwater', 
-                             sim.year = iyear + 1, value = effort.mid)
+  MAB.scene <- adjust.fishing(MAB.scene, 'ForcedEffort', 'Fixed Gear', 
+                             sim.year = iyear + 1, value = effort.fix)
+  MAB.scene <- adjust.fishing(MAB.scene, 'ForcedEffort', 'Recreational', 
+                             sim.year = iyear + 1, value = effort.rec)
+  MAB.scene <- adjust.fishing(MAB.scene, 'ForcedEffort', 'SM Mesh', 
+                             sim.year = iyear + 1, value = effort.smm)
   
   } 
 
@@ -694,7 +739,7 @@ start[, Group := names(MAB.full$start_state$Biomass)]
 MAB.bio <- merge(MAB.bio, start, by = 'Group')
 MAB.bio[, Rel.biomass := Biomass / V1]
 
-ggplot(MAB.bio[Group %in% c('SummerFlounder', 'Butterfish', 'Scup')],
+ggplot(MAB.bio[Group %in% c('SummerFlounder', 'Butterfish', 'Scup', 'Illex')],
        aes(x = Month, y = Rel.biomass, col = Group)) +
   geom_line()
 ```
@@ -702,7 +747,7 @@ ggplot(MAB.bio[Group %in% c('SummerFlounder', 'Butterfish', 'Scup')],
 Collect the results for further analysis
 ```{r}
 #Get in a similar format to SS models run in other rmds
-sp.cols <- which(colnames(MAB.full$annual_Biomass) %in% c('SummerFlounder', 'Butterfish', 'Scup'))
+sp.cols <- which(colnames(MAB.full$annual_Biomass) %in% c('SummerFlounder', 'Butterfish', 'Scup', 'Illex'))
 
 #Biomass
 biomass <- as.data.table(MAB.full$annual_Biomass[, sp.cols])
@@ -717,10 +762,10 @@ catch <- data.table::melt(catch, id.vars = 'Year', variable.name = 'Species')
 catch[, type := 'catch']
 
 output <- rbindlist(list(biomass, catch))
-output[, HCR := 'PSPS_min']
+output[, HCR := 'HCR_mineft']
 ```
 
-# Rerun simulation but with max effort taken rather than min
+## Rerun simulation but with max effort taken rather than min
 
 ```{r}
 set.seed(123)
@@ -728,8 +773,8 @@ set.seed(123)
 MAB.full <- copy(MAB.run)
 
 #Divide TAC proportionally between the three gears
-props <- qtable[, .SD / rowSums(.SD), .SDcols = c('Gillnet', 'OtterTrawlLg',
-                                                  'Midwater')]
+props <- qtable[, .SD / rowSums(.SD), .SDcols = c('LG Mesh', 'Fixed Gear',
+                                                  'SM Mesh', 'Recreational')]
 props[, Group := qtable[, Group]]
 
 for(iyear in 2023:2042){
@@ -737,52 +782,72 @@ for(iyear in 2023:2042){
     
   #New observations
   new.sf <- GenData(MAB.full, 'SummerFlounder', iyear, Sigma = 0.1)
-  new.butter <- GenData(MAB.full, 'Butterfish', iyear, Sigma = 0.1)
+  new.butter <- GenData(MAB.full, 'Butterfish', iyear, Sigma = 0.2)
   new.scup <- GenData(MAB.full, 'Scup', iyear, Sigma = 0.1)
+  new.illex <- GenData(MAB.full, 'Illex', iyear, Sigma = 0.3)
   
   #New TAC
   index.sf <- new.sf$ObsBio
   index.butter <- new.butter$ObsBio
   index.scup <- new.scup$ObsBio
+  index.illex <- new.illex$ObsBio
   
   TAC.sf <- control(index.sf, control.pars, Species = "SummerFlounder") * index.sf
   TAC.butter <- control(index.butter, control.pars, Species = "Butterfish") * index.butter
   TAC.scup <- control(index.scup, control.pars, Species = "Scup") * index.scup
+  TAC.illex <- control(index.illex, control.pars, Species = "Illex") * index.illex
+
   
   #proportion TAC
-  TAC.sf.lgm <- TAC.sf * props[Group == 'SummerFlounder', OtterTrawlLg]
-  TAC.sf.gil <- TAC.sf * props[Group == 'SummerFlounder', Gillnet]
-  TAC.sf.mid <- TAC.sf * props[Group == 'SummerFlounder', Midwater]
+  TAC.sf.lgm <- TAC.sf * props[Group == 'SummerFlounder', `LG Mesh`]
+  TAC.sf.fix <- TAC.sf * props[Group == 'SummerFlounder', `Fixed Gear`]
+  TAC.sf.smm <- TAC.sf * props[Group == 'SummerFlounder', `SM Mesh`]
+  TAC.sf.rec <- TAC.sf * props[Group == 'SummerFlounder', `Recreational`]
+
+  TAC.butter.lgm <- TAC.butter * props[Group == 'Butterfish', `LG Mesh`]
+  TAC.butter.fix <- TAC.butter * props[Group == 'Butterfish', `Fixed Gear`]
+  TAC.butter.smm <- TAC.butter * props[Group == 'Butterfish', `SM Mesh`]
+  TAC.butter.rec <- TAC.butter * props[Group == 'Butterfish', `Recreational`]
   
-  TAC.butter.lgm <- TAC.butter * props[Group == 'Butterfish', OtterTrawlLg]
-  TAC.butter.gil <- TAC.butter * props[Group == 'Butterfish', Gillnet]
-  TAC.butter.mid <- TAC.butter * props[Group == 'Butterfish', Midwater]
+  TAC.scup.lgm <- TAC.scup * props[Group == 'Scup', `LG Mesh`]
+  TAC.scup.fix <- TAC.scup * props[Group == 'Scup', `Fixed Gear`]
+  TAC.scup.smm <- TAC.scup * props[Group == 'Scup', `SM Mesh`]
+  TAC.scup.rec <- TAC.scup * props[Group == 'Scup', `Recreational`]
   
-  TAC.scup.lgm <- TAC.scup * props[Group == 'Scup', OtterTrawlLg]
-  TAC.scup.gil <- TAC.scup * props[Group == 'Scup', Gillnet]
-  TAC.scup.mid <- TAC.scup * props[Group == 'Scup', Midwater]
+  TAC.illex.lgm <- TAC.illex * props[Group == 'Illex', `LG Mesh`]
+  TAC.illex.fix <- TAC.illex * props[Group == 'Illex', `Fixed Gear`]
+  TAC.illex.smm <- TAC.illex * props[Group == 'Illex', `SM Mesh`]
+  TAC.illex.rec <- TAC.illex * props[Group == 'Illex', `Recreational`]
+  
   
   #Implement new TAC via effort
-  #Large mesh trawl and gillnet will be set by the lower effort between sf and butter
-  effort.lgm <- max(c(implement(TAC.sf.lgm, qtable[Group == 'SummerFlounder', OtterTrawlLg],
+  #Recreational and SM Mesh will be set by the lower effort between sf and scup
+  effort.smm <- max(c(implement(TAC.sf.smm, qtable[Group == 'SummerFlounder', `SM Mesh`],
                                 index.sf),
-                      implement(TAC.butter.lgm, qtable[Group == 'Butterfish', OtterTrawlLg],
-                                index.butter)))
-  effort.gil <- max(c(implement(TAC.sf.gil, qtable[Group == 'SummerFlounder', Gillnet],
+                      implement(TAC.scup.smm, qtable[Group == 'Scup', `SM Mesh`],
+                                index.scup)))
+  effort.rec <- max(c(implement(TAC.sf.rec, qtable[Group == 'SummerFlounder', `Recreational`],
                                 index.sf),
-                      implement(TAC.butter.gil, qtable[Group == 'Butterfish', Gillnet],
-                                index.butter))) 
-  #Midwater set by scup
-  effort.mid <- implement(TAC.scup.mid, qtable[Group == 'Scup', Midwater],
+                      implement(TAC.scup.rec, qtable[Group == 'Scup', `Recreational`],
+                                index.scup))) 
+  #LG Mesh set by butterfish
+  effort.lgm <- implement(TAC.butter.lgm, qtable[Group == 'Butterfish', `LG Mesh`],
+                          index.butter)
+  
+  #Fixed set by scup
+  effort.fix <- implement(TAC.scup.fix, qtable[Group == 'Scup', `Fixed Gear`],
                           index.scup)
+
   
   #Set new Effort
-  MAB.scene <- adjust.fishing(MAB.scene, 'ForcedEffort', 'OtterTrawlLg', 
+  MAB.scene <- adjust.fishing(MAB.scene, 'ForcedEffort', 'LG Mesh', 
                              sim.year = iyear + 1, value = effort.lgm)
-  MAB.scene <- adjust.fishing(MAB.scene, 'ForcedEffort', 'Gillnet', 
-                             sim.year = iyear + 1, value = effort.gil)
-  MAB.scene <- adjust.fishing(MAB.scene, 'ForcedEffort', 'Midwater', 
-                             sim.year = iyear + 1, value = effort.mid)
+  MAB.scene <- adjust.fishing(MAB.scene, 'ForcedEffort', 'Fixed Gear', 
+                             sim.year = iyear + 1, value = effort.fix)
+  MAB.scene <- adjust.fishing(MAB.scene, 'ForcedEffort', 'Recreational', 
+                             sim.year = iyear + 1, value = effort.rec)
+  MAB.scene <- adjust.fishing(MAB.scene, 'ForcedEffort', 'SM Mesh', 
+                             sim.year = iyear + 1, value = effort.smm)
   
   } 
 
@@ -800,7 +865,7 @@ start[, Group := names(MAB.full$start_state$Biomass)]
 MAB.bio <- merge(MAB.bio, start, by = 'Group')
 MAB.bio[, Rel.biomass := Biomass / V1]
 
-ggplot(MAB.bio[Group %in% c('SummerFlounder', 'Butterfish', 'Scup')],
+ggplot(MAB.bio[Group %in% c('SummerFlounder', 'Butterfish', 'Scup', "Illex")],
        aes(x = Month, y = Rel.biomass, col = Group)) +
   geom_line()
 ```
@@ -808,7 +873,7 @@ ggplot(MAB.bio[Group %in% c('SummerFlounder', 'Butterfish', 'Scup')],
 Collect the results for further analysis
 ```{r}
 #Get in a similar format to SS models run in other rmds
-sp.cols <- which(colnames(MAB.full$annual_Biomass) %in% c('SummerFlounder', 'Butterfish', 'Scup'))
+sp.cols <- which(colnames(MAB.full$annual_Biomass) %in% c('SummerFlounder', 'Butterfish', 'Scup', 'Illex'))
 
 #Biomass
 biomass <- as.data.table(MAB.full$annual_Biomass[, sp.cols])
@@ -823,9 +888,9 @@ catch <- data.table::melt(catch, id.vars = 'Year', variable.name = 'Species')
 catch[, type := 'catch']
 
 output2 <- rbindlist(list(biomass, catch))
-output2[, HCR := 'PSPS_max']
+output2[, HCR := 'HCR_maxeft']
 
 output <- rbindlist(list(output, output2))
 
-saveRDS(output, file = here('multispecies', 'data', 'MS_PSPS.rds'))
+saveRDS(output, file = here('MSE', 'MS_MAFMC_HCR.rds'))
 ```
