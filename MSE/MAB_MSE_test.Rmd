@@ -36,7 +36,7 @@ MAB <- Rpath::rpath(MAB.rpath.params) # gives same object as MAB.rpath loaded ab
 
 This is the model structure, with fleets added in.
 One strange thing is the HMS Fleet has 0 catch so it breaks the plotting function.
-We should either take it out or add real catch.
+We should either take the HMS Fleet out or add real catch of HMS.
 For this figure, HMS catch totalling 10% of HMS biomass was added. We are not using this model for analysis
 
 ```{r}
@@ -83,7 +83,7 @@ MAB.run <- rsim.run(MAB.scene, years = 1983:2022)
 
 ```
 
-This is the impact of the fishing scenarios we have implemented
+This is the impact of the fishing scenarios we have implemented across many of the MAFMC managed stocks. Butterfish and squids are seeing some predatory release despite an increase in fishing effort. We havent done anything with dredge gear so surfclams and quahogs are unaffected.
 
 ```{r}
 #Plot results
@@ -99,7 +99,7 @@ MAB.bio[, Rel.biomass := Biomass / V1]
 
 ggplot2::ggplot(MAB.bio[Group %in% c('SummerFlounder', 'Scup', 'Butterfish', 'SpinyDogfish',
                                      'BlackSeaBass', 'Bluefish', 'AtlMackerel', 'Loligo',
-                                     'Illex')],
+                                     'Illex', 'SurfClam', 'OceanQuahog')],
                 ggplot2::aes(x = Month, y = Rel.biomass, col = Group)) +
   ggplot2::geom_line()
 
@@ -132,7 +132,7 @@ GenData <- function(Rsim.output, group, sim.year, Sigma = 0.3, bias = 1, freq = 
 
 ```
 
-These are the generated "datasets"
+These are the generated "datasets" for summer flounder, scup, butterfish, and Illex. This group is just an example, we can add or subtract stocks as we wish.
 
 ```{r}
 #Now generate the initial data set and fit to a Schaefer production model
