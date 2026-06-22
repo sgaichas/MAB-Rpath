@@ -357,6 +357,13 @@ MABillex <- assess(harvest.MABillex,index.MABillex,calc.vcov=TRUE,ini.parms.MABi
 MABillex
 ```
 
+The models have difficulty fitting the time series without high contrast, as might be expected. 
+
+Summer flounder is ok, scup intermediate, and butterfish and illex are worst.
+
+We'll proceed with this example simply to demonstrate the closed loop with the MAFMC risk policy and ABC HCR in place but for real analyses scaling the assessment reference points into Rpath scale would be best.
+
+
 MAB SS model fit plots: fitted line in gray
 ```{r}
 
@@ -504,7 +511,7 @@ Translating this into a control rule for Rpath requires some assumptions about O
 *  Butterfish OFL CV 150%
 *  Illex does not have full assessment or an OFL CV but if it did it might be 150%
 
-```{r}
+```{r, warning=FALSE}
 
 SS.OFLCV <- data.frame(Species = c("SummerFlounder", "Scup", "Butterfish", "Illex"),
                        OFLCV = c(0.60, 1.00, 1.50, 1.50))
@@ -542,11 +549,6 @@ control.pars$B4 <- 0.5*SS.BMSY$BMSY # not used in HCR but in status determinatio
     Fofl <- control.pars$Fofl[control.pars$Species==Species]
     
     OFLCV <- control.pars$OFLCV[control.pars$Species==Species]
-
-    H1 <- qlnorm(pstar1, log(Fofl), log(OFLCV + Fofl))
-
-    H4 <- qlnorm(pstar3, log(Fofl), log(OFLCV + Fofl))
-    
    
     B4 <- control.pars$B4[control.pars$Species==Species]
 
@@ -554,11 +556,15 @@ control.pars$B4 <- 0.5*SS.BMSY$BMSY # not used in HCR but in status determinatio
     B2 <- control.pars$B2[control.pars$Species==Species]
     B1 <- control.pars$B1[control.pars$Species==Species]
     
+    H1 <- qlnorm(pstar1, log(Fofl), log(OFLCV + Fofl))
+    H2 <- qlnorm((estimated.biomass-B2)*((pstar1-pstar2)/(B1-B2))+pstar2, log(Fofl), log(OFLCV + Fofl))
+    H3 <- qlnorm((estimated.biomass-B3)*((pstar2-pstar3)/(B2-B3)), log(Fofl), log(OFLCV + Fofl))
+    H4 <- qlnorm(pstar3, log(Fofl), log(OFLCV + Fofl))
+
+    
     harv <- ifelse(estimated.biomass >= B1, H1,
-                   ifelse(estimated.biomass < B1 & estimated.biomass >= B2,
-                          qlnorm((estimated.biomass-B2)*((pstar1-pstar2)/(B1-B2))+pstar2, log(Fofl), log(OFLCV + Fofl)),
-                          ifelse(estimated.biomass < B2 & estimated.biomass >= B3, 
-                                 qlnorm((estimated.biomass-B3)*((pstar2-pstar3)/(B2-B3)), log(Fofl), log(OFLCV + Fofl)),
+                   ifelse(estimated.biomass < B1 & estimated.biomass >= B2, H2,
+                          ifelse(estimated.biomass < B2 & estimated.biomass >= B3, H3,
                                  ifelse(estimated.biomass < B3, H4, 0
                                  ))))
     return(harv)
@@ -567,7 +573,7 @@ control.pars$B4 <- 0.5*SS.BMSY$BMSY # not used in HCR but in status determinatio
 
 HCR Shape scaled harvest rate and Rpath biomass
 
-```{r}
+```{r, warning=FALSE}
 
 simbio <- seq(0, 2.0, 0.0001)
 sfharv <- control(simbio, control.pars, "SummerFlounder")
@@ -575,7 +581,9 @@ scupharv <- control(simbio, control.pars, "Scup")
 butterharv <- control(simbio, control.pars, "Butterfish")
 illexharv <- control(simbio, control.pars, "Illex")
 
-plot(simbio, illexharv, type = "n")
+maxy <- unique(max(illexharv, butterharv))
+
+plot(simbio, sfharv, xlim=c(0,2), ylim = c(0, maxy), type = "n", ylab = "Harvest Rate")
 lines(simbio, sfharv) 
 lines(simbio, scupharv) 
 lines(simbio, butterharv)
@@ -641,7 +649,7 @@ MAB.run <- rsim.run(MAB.scene, years = 1983:2022, method = 'AB')
 
 ## Run the closed loop
 
-```{r}
+```{r, warning=FALSE}
 set.seed(1234)
 
 MAB.full <- copy(MAB.run)
@@ -767,7 +775,7 @@ output[, HCR := 'HCR_mineft']
 
 ## Rerun simulation but with max effort taken rather than min
 
-```{r}
+```{r, warning=FALSE}
 set.seed(123)
 
 MAB.full <- copy(MAB.run)
