@@ -540,6 +540,9 @@ control.pars$B4 <- 0.5*SS.BMSY$BMSY # not used in HCR but in status determinatio
 
 
 #MAFMC ABC HCR  
+# This needs to estimate OFL and output an ABC directly I think rather than adjust the exploitation rate
+# then maybe we can specify the catch and back calculate the effort needed to get it?
+
   control <- function(estimated.biomass, control.pars, Species) {
     
     pstar1 <- control.pars$pstar1 
