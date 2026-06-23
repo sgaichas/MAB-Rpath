@@ -505,6 +505,9 @@ p1 + p2
 
 See [2020 MAFMC risk policy](https://www.mafmc.org/s/b_Implications-of-MAFMC-Risk-Policy-for-Multi.pdf) and [MAFMC ABC control rule](http://www.mafmc.org/s/MAFMC-ABC-Control-Rule-White-Paper.pdf)
 
+The control rule adjusts OFL (Fofl = Fmsy * current B) to ABC using the risk policy's pstar at current B as the percentile of OFL 
+assuming that the OFL is lognormally distributed with CV = OFL CV.
+
 Translating this into a control rule for Rpath requires some assumptions about OFL CV for each species. We can use the current OFL CVs as a starting point:
 *  Summer flounder OFL CV 60%
 *  Scup OFL CV 100%
@@ -540,8 +543,9 @@ control.pars$B4 <- 0.5*SS.BMSY$BMSY # not used in HCR but in status determinatio
 
 
 #MAFMC ABC HCR  
-# This needs to estimate OFL and output an ABC directly I think rather than adjust the exploitation rate
-# then maybe we can specify the catch and back calculate the effort needed to get it?
+# This returns the ABC proportion of OFL rather than adjust the exploitation rate
+# The calc in the MSE loop below is the returned harv*index so calc the ABC scalar here and apply it with Fofl in the loop
+# Then we have Fofl*index = OFL * ABC scalar = ABC
 
   control <- function(estimated.biomass, control.pars, Species) {
     
@@ -549,7 +553,7 @@ control.pars$B4 <- 0.5*SS.BMSY$BMSY # not used in HCR but in status determinatio
     pstar2 <- control.pars$pstar2 
     pstar3 <- control.pars$pstar3 
     
-    Fofl <- control.pars$Fofl[control.pars$Species==Species]
+    Fofl <- control.pars$Fofl[control.pars$Species==Species] #not needed here
     
     OFLCV <- control.pars$OFLCV[control.pars$Species==Species]
    
@@ -559,38 +563,43 @@ control.pars$B4 <- 0.5*SS.BMSY$BMSY # not used in HCR but in status determinatio
     B2 <- control.pars$B2[control.pars$Species==Species]
     B1 <- control.pars$B1[control.pars$Species==Species]
     
-    H1 <- qlnorm(pstar1, log(Fofl), log(OFLCV + Fofl))
-    H2 <- qlnorm((estimated.biomass-B2)*((pstar1-pstar2)/(B1-B2))+pstar2, log(Fofl), log(OFLCV + Fofl))
-    H3 <- qlnorm((estimated.biomass-B3)*((pstar2-pstar3)/(B2-B3)), log(Fofl), log(OFLCV + Fofl))
-    H4 <- qlnorm(pstar3, log(Fofl), log(OFLCV + Fofl))
+    H1 <- qlnorm(pstar1, log(1), log(OFLCV + 1))
+    H2 <- qlnorm((estimated.biomass-B2)*((pstar1-pstar2)/(B1-B2))+pstar2, log(1), log(OFLCV + 1))
+    H3 <- qlnorm((estimated.biomass-B3)*((pstar2-pstar3)/(B2-B3)), log(1), log(OFLCV + 1))
+    H4 <- qlnorm(pstar3, log(1), log(OFLCV + 1))
 
     
-    harv <- ifelse(estimated.biomass >= B1, H1,
+    ABCscal <- ifelse(estimated.biomass >= B1, H1,
                    ifelse(estimated.biomass < B1 & estimated.biomass >= B2, H2,
                           ifelse(estimated.biomass < B2 & estimated.biomass >= B3, H3,
                                  ifelse(estimated.biomass < B3, H4, 0
                                  ))))
-    return(harv)
+    return(ABCscal)
   }
 ```
 
-HCR Shape scaled harvest rate and Rpath biomass
+HCR Shape: ABC (solid), OFL (dotted) for different levels of Rpath biomass, summer flounder black, scup red, butter green, illex blue
 
 ```{r, warning=FALSE}
 
 simbio <- seq(0, 2.0, 0.0001)
-sfharv <- control(simbio, control.pars, "SummerFlounder")
-scupharv <- control(simbio, control.pars, "Scup")
-butterharv <- control(simbio, control.pars, "Butterfish")
-illexharv <- control(simbio, control.pars, "Illex")
+sfABC <- control(simbio, control.pars, "SummerFlounder") * simbio * control.pars$Fofl[control.pars$Species=="SummerFlounder"]
+scupABC <- control(simbio, control.pars, "Scup") * simbio * control.pars$Fofl[control.pars$Species=="Scup"]
+butterABC <- control(simbio, control.pars, "Butterfish") * simbio * control.pars$Fofl[control.pars$Species=="Butterfish"]
+illexABC <- control(simbio, control.pars, "Illex") * simbio * control.pars$Fofl[control.pars$Species=="Illex"]
 
-maxy <- unique(max(illexharv, butterharv))
+maxy <- unique(max(illexABC, butterABC))
 
-plot(simbio, sfharv, xlim=c(0,2), ylim = c(0, maxy), type = "n", ylab = "Harvest Rate")
-lines(simbio, sfharv) 
-lines(simbio, scupharv) 
-lines(simbio, butterharv)
-lines(simbio, illexharv)
+plot(simbio, sfABC, xlim=c(0,2), ylim = c(0, maxy), type = "n", ylab = "ABC")
+lines(simbio, sfABC, col=1) 
+lines(simbio, scupABC, col=2) 
+lines(simbio, butterABC, col=3)
+lines(simbio, illexABC, col=4)
+lines(simbio, simbio * control.pars$Fofl[control.pars$Species=="SummerFlounder"], lty=3, col=1) 
+lines(simbio, simbio * control.pars$Fofl[control.pars$Species=="Scup"], lty=3, col=2) 
+lines(simbio, simbio * control.pars$Fofl[control.pars$Species=="Butterfish"], lty=3, col=3)
+lines(simbio, simbio * control.pars$Fofl[control.pars$Species=="Illex"], lty=3, col=4)
+
 
 ```
 
@@ -677,10 +686,16 @@ for(iyear in 2023:2042){
   index.scup <- new.scup$ObsBio
   index.illex <- new.illex$ObsBio
   
-  TAC.sf <- control(index.sf, control.pars, Species = "SummerFlounder") * index.sf
-  TAC.butter <- control(index.butter, control.pars, Species = "Butterfish") * index.butter
-  TAC.scup <- control(index.scup, control.pars, Species = "Scup") * index.scup
-  TAC.illex <- control(index.illex, control.pars, Species = "Illex") * index.illex
+  #F_OFL is Fmsy
+  Fofl.sf <- control.pars$Fofl[control.pars$Species=="SummerFlounder"]
+  Fofl.butter <- control.pars$Fofl[control.pars$Species=="Butterfish"]
+  Fofl.scup <- control.pars$Fofl[control.pars$Species=="Scup"]
+  Fofl.illex <- control.pars$Fofl[control.pars$Species=="Illex"]
+  
+  TAC.sf <- control(index.sf, control.pars, Species = "SummerFlounder") * (index.sf * Fofl.sf)
+  TAC.butter <- control(index.butter, control.pars, Species = "Butterfish") * (index.butter * Fofl.butter)
+  TAC.scup <- control(index.scup, control.pars, Species = "Scup") * (index.scup * Fofl.scup)
+  TAC.illex <- control(index.illex, control.pars, Species = "Illex") * (index.illex * Fofl.illex)
 
   
   #proportion TAC
@@ -706,17 +721,17 @@ for(iyear in 2023:2042){
   
   
   #Implement new TAC via effort
-  #Recreational and SM Mesh will be set by the lower effort between sf and scup
+  #Recreational will be set by the lower effort between sf and scup, sm mesh sf and butterfish
   effort.smm <- min(c(implement(TAC.sf.smm, qtable[Group == 'SummerFlounder', `SM Mesh`],
                                 index.sf),
-                      implement(TAC.scup.smm, qtable[Group == 'Scup', `SM Mesh`],
+                      implement(TAC.scup.smm, qtable[Group == 'Butterfish', `SM Mesh`],
                                 index.scup)))
   effort.rec <- min(c(implement(TAC.sf.rec, qtable[Group == 'SummerFlounder', `Recreational`],
                                 index.sf),
                       implement(TAC.scup.rec, qtable[Group == 'Scup', `Recreational`],
                                 index.scup))) 
-  #LG Mesh set by butterfish
-  effort.lgm <- implement(TAC.butter.lgm, qtable[Group == 'Butterfish', `LG Mesh`],
+  #LG Mesh set by summer flounder
+  effort.lgm <- implement(TAC.butter.lgm, qtable[Group == 'SummerFlounder', `LG Mesh`],
                           index.butter)
   
   #Fixed set by scup
@@ -803,10 +818,16 @@ for(iyear in 2023:2042){
   index.scup <- new.scup$ObsBio
   index.illex <- new.illex$ObsBio
   
-  TAC.sf <- control(index.sf, control.pars, Species = "SummerFlounder") * index.sf
-  TAC.butter <- control(index.butter, control.pars, Species = "Butterfish") * index.butter
-  TAC.scup <- control(index.scup, control.pars, Species = "Scup") * index.scup
-  TAC.illex <- control(index.illex, control.pars, Species = "Illex") * index.illex
+  #F_OFL is Fmsy
+  Fofl.sf <- control.pars$Fofl[control.pars$Species=="SummerFlounder"]
+  Fofl.butter <- control.pars$Fofl[control.pars$Species=="Butterfish"]
+  Fofl.scup <- control.pars$Fofl[control.pars$Species=="Scup"]
+  Fofl.illex <- control.pars$Fofl[control.pars$Species=="Illex"]
+  
+  TAC.sf <- control(index.sf, control.pars, Species = "SummerFlounder") * (index.sf * Fofl.sf)
+  TAC.butter <- control(index.butter, control.pars, Species = "Butterfish") * (index.butter * Fofl.butter)
+  TAC.scup <- control(index.scup, control.pars, Species = "Scup") * (index.scup * Fofl.scup)
+  TAC.illex <- control(index.illex, control.pars, Species = "Illex") * (index.illex * Fofl.illex)
 
   
   #proportion TAC
@@ -832,17 +853,17 @@ for(iyear in 2023:2042){
   
   
   #Implement new TAC via effort
-  #Recreational and SM Mesh will be set by the lower effort between sf and scup
+  #Recreational will be set by the lower effort between sf and scup, sm mesh sf and butterfish
   effort.smm <- max(c(implement(TAC.sf.smm, qtable[Group == 'SummerFlounder', `SM Mesh`],
                                 index.sf),
-                      implement(TAC.scup.smm, qtable[Group == 'Scup', `SM Mesh`],
+                      implement(TAC.scup.smm, qtable[Group == 'Butterfish', `SM Mesh`],
                                 index.scup)))
   effort.rec <- max(c(implement(TAC.sf.rec, qtable[Group == 'SummerFlounder', `Recreational`],
                                 index.sf),
                       implement(TAC.scup.rec, qtable[Group == 'Scup', `Recreational`],
                                 index.scup))) 
-  #LG Mesh set by butterfish
-  effort.lgm <- implement(TAC.butter.lgm, qtable[Group == 'Butterfish', `LG Mesh`],
+  #LG Mesh set by summer Flounder
+  effort.lgm <- implement(TAC.butter.lgm, qtable[Group == 'SummerFlounder', `LG Mesh`],
                           index.butter)
   
   #Fixed set by scup
