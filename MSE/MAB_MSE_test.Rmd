@@ -21,7 +21,7 @@ The goal is to set up the Rpath MSE loop for the MAB Rpath model and integrate a
 
 # Load the balanced Mid Atlantic Rpath model
 
-This model is the same used in S. Weisberg et al in press, comparing all three NEUS Rpaths.
+This model is the same used in S. [Weisberg et al 2026](https://esajournals.onlinelibrary.wiley.com/doi/10.1002/eap.70303), comparing all three NEUS Rpaths.
 
 This model has had discards removed for the paper above so I'm only using it for testing. We will want to add them back in for any real analysis.
 
