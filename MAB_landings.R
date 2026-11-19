@@ -21,7 +21,7 @@ source(here("MAB_basic_inputs.R"))
 
 
 ## Change "HMS" to "HMS Fleet"
-mean.land[FLEET == "HMS",FLEET := "HMS FLEET"]
+mean.land[FLEET == "HMS",FLEET := "HMS Fleet"]
 
 ## Calculate area within MAB
 # strata<-readOGR('data/strata','strata')
